@@ -1,43 +1,41 @@
 package com.example.authenticationAndPKILab.controller;
 
 import com.example.authenticationAndPKILab.dto.LoginDataDto;
+import com.example.authenticationAndPKILab.service.AuthService;
 import com.example.authenticationAndPKILab.utils.JwtUtil;
-import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.BadCredentialsException;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
-import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.provisioning.InMemoryUserDetailsManager;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.HashMap;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/auth")
 public class AuthController {
     private final JwtUtil jwtUtil;
-    private final InMemoryUserDetailsManager userDetailsService;
+    private final UserDetailsService userDetailsService;
+    private final AuthService authService;
 
-    public AuthController(JwtUtil jwtUtil,  @Qualifier("userDetailsService") InMemoryUserDetailsManager userDetailsService) {
+    public AuthController(JwtUtil jwtUtil, UserDetailsService userDetailsService, AuthService authService) {
         this.jwtUtil = jwtUtil;
         this.userDetailsService = userDetailsService;
+        this.authService = authService;
     }
-
     @PostMapping("/login")
-    public String login(@RequestBody LoginDataDto loginDataDto) {
-        System.out.println("Here exactly mn");
+    public ResponseEntity<Map<String, String>> login(@RequestBody LoginDataDto loginDataDto) {
         try {
-            new AuthenticationConfiguration().getAuthenticationManager().authenticate(
-                    new UsernamePasswordAuthenticationToken(loginDataDto.username(), loginDataDto.password())
-            );
-            System.out.println("Passed here");
-        } catch (BadCredentialsException e) {
-            e.printStackTrace();
+            String jwt = authService.login(loginDataDto.username(), loginDataDto.password());
+            Map<String, String> response = new HashMap<>();
+            response.put("token", jwt);
+            return ResponseEntity.ok(response);
         } catch (Exception e) {
-            throw new RuntimeException(e);
+            e.printStackTrace();
+            Map<String, String> errorResponse = new HashMap<>();
+            errorResponse.put("error", e.getMessage());
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(errorResponse);
         }
-
-        UserDetails userDetails = userDetailsService.loadUserByUsername(loginDataDto.username());
-
-        return jwtUtil.generateToken(userDetails);
     }
+
 }

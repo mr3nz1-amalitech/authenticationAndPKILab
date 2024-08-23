@@ -3,16 +3,19 @@ package com.example.authenticationAndPKILab.config;
 import com.example.authenticationAndPKILab.filter.JwtFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
-
+import org.springframework.security.config.http.SessionCreationPolicy;
 
 @Configuration
 @EnableWebSecurity
@@ -24,54 +27,36 @@ public class WebSecConfig {
     }
 
     @Bean
-    public InMemoryUserDetailsManager userDetailsService() {
-        UserDetails doctor = User
-                .withUsername("doctor")
-                .password(
-                        passwordEncoder()
-                                .encode("doctor")
-                )
-                .roles("DOCTOR").
-                build();
-
-        UserDetails patient = User
-                .withUsername("patient").password(
-                        passwordEncoder().encode("patient")
-                )
-                .roles("PATIENT")
-                .build();
-
-        UserDetails admin = User
-                .withUsername("admin")
-                .password(
-                        passwordEncoder().encode("admin")
-                )
-                .roles("ADMIN")
-                .build();
-
-        return new InMemoryUserDetailsManager(doctor, patient, admin);
-    }
-
-    @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        return http
-                .authorizeHttpRequests(
-                        auth -> auth
-                                .requestMatchers("/home").permitAll()
-                                .requestMatchers("/doctor/**").hasRole("DOCTOR")
-                                .requestMatchers("/patient/**").hasRole("PATIENT")
-                                .requestMatchers("/admin/**").hasRole("ADMIN")
-                                .requestMatchers("/api/v1/login").permitAll()
-                                .anyRequest().authenticated()
+        http
+                .csrf(csrf -> csrf.disable())  // Disable CSRF for APIs
+                .authorizeHttpRequests(auth -> auth
+                        .requestMatchers("/api/v1/auth/login").permitAll()  // Allow public access to the login endpoint
+                        .requestMatchers("/home").permitAll()
+                        .requestMatchers("/doctor/**").hasRole("DOCTOR")
+                        .requestMatchers("/patient/**").hasRole("PATIENT")
+                        .requestMatchers("/admin/**").hasRole("ADMIN")
+                        .anyRequest().authenticated()
                 )
-                .formLogin(
-                        form -> form.defaultSuccessUrl("/home", true)
+                .formLogin(form -> form
+                        .defaultSuccessUrl("/home", true)  // Redirect on successful login
+                        .permitAll()
                 )
-                .logout(config -> config.logoutUrl("/logout")).addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class).build();
+                .logout(config -> config
+                        .logoutUrl("/logout")
+                        .logoutSuccessUrl("/login?logout")
+                        .permitAll()
+                )
+                .sessionManagement(session -> session
+                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS)  // Stateless for APIs
+                )
+                .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);  // Add JWT filter before the default filter
+
+        return http.build();
     }
 
     @Bean
-    public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
+    public AuthenticationManager authenticationManager(AuthenticationConfiguration authenticationConfiguration) throws Exception {
+        return authenticationConfiguration.getAuthenticationManager();
     }
 }
